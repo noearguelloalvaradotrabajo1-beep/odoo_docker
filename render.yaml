@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: odoo
+    env: docker
+    docker:
+      dockerfilePath: ./17.0/Dockerfile
+    envVars:
+      - key: HOST
+        fromDatabase:
+          name: odoo-db
+          property: host
+      - key: USER
+        fromDatabase:
+          name: odoo-db
+          property: user
+      - key: PASSWORD
+        fromDatabase:
+          name: odoo-db
+          property: password
+      - key: ADMIN_PASSWORD
+        generateValue: true
+    plans:
+      - name: free
+        price: 0
+
+databases:
+  - name: odoo-db
+    databaseName: odoo
+    plan: free
+    ipAllowList: []
