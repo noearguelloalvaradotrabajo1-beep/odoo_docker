@@ -1,49 +1,32 @@
 #!/bin/bash
-
 set -e
 
-if [ -v PASSWORD_FILE ]; then
-    PASSWORD="$(< $PASSWORD_FILE)"
+# Configuración para Render
+if [ ! -f /etc/odoo/odoo.conf ]; then
+    echo "Creando configuración de Odoo para Render..."
+    cat > /etc/odoo/odoo.conf << EOF
+[options]
+addons_path = /mnt/extra-addons
+data_dir = /var/lib/odoo
+admin_passwd = ${ADMIN_PASSWORD}
+db_host = ${HOST}
+db_port = 5432
+db_user = ${USER}
+db_password = ${PASSWORD}
+without_demo = True
+proxy_mode = True
+EOF
 fi
 
-# set the postgres database host, port, user and password according to the environment
-# and pass them as arguments to the odoo process if not present in the config file
-: ${HOST:=${DB_PORT_5432_TCP_ADDR:='db'}}
-: ${PORT:=${DB_PORT_5432_TCP_PORT:=5432}}
-: ${USER:=${DB_ENV_POSTGRES_USER:=${POSTGRES_USER:='odoo'}}}
-: ${PASSWORD:=${DB_ENV_POSTGRES_PASSWORD:=${POSTGRES_PASSWORD:='odoo'}}}
+# Esperar a PostgreSQL solo si HOST está definido
+if [ -n "$HOST" ]; then
+    echo "Esperando a PostgreSQL en $HOST:5432..."
+    until PGPASSWORD=$PASSWORD psql -h "$HOST" -U "$USER" -d postgres -c '\q'; do
+        >&2 echo "PostgreSQL no disponible - esperando..."
+        sleep 5
+    done
+    echo "PostgreSQL está listo!"
+fi
 
-DB_ARGS=()
-function check_config() {
-    param="$1"
-    value="$2"
-    if grep -q -E "^\s*\b${param}\b\s*=" "$ODOO_RC" ; then       
-        value=$(grep -E "^\s*\b${param}\b\s*=" "$ODOO_RC" |cut -d " " -f3|sed 's/["\n\r]//g')
-    fi;
-    DB_ARGS+=("--${param}")
-    DB_ARGS+=("${value}")
-}
-check_config "db_host" "$HOST"
-check_config "db_port" "$PORT"
-check_config "db_user" "$USER"
-check_config "db_password" "$PASSWORD"
-
-case "$1" in
-    -- | odoo)
-        shift
-        if [[ "$1" == "scaffold" ]] ; then
-            exec odoo "$@"
-        else
-            wait-for-psql.py ${DB_ARGS[@]} --timeout=30
-            exec odoo "$@" "${DB_ARGS[@]}"
-        fi
-        ;;
-    -*)
-        wait-for-psql.py ${DB_ARGS[@]} --timeout=30
-        exec odoo "$@" "${DB_ARGS[@]}"
-        ;;
-    *)
-        exec "$@"
-esac
-
-exit 1
+echo "Iniciando Odoo..."
+exec "$@"
