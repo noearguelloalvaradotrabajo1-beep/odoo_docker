@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-# Configuración para Render
-if [ ! -f /etc/odoo/odoo.conf ]; then
-    echo "Creando configuración de Odoo para Render..."
-    cat > /etc/odoo/odoo.conf << EOF
+echo "=== Iniciando configuración Odoo ==="
+
+# Crear archivo de configuración
+cat > /etc/odoo/odoo.conf << EOF
 [options]
 addons_path = /mnt/extra-addons
 data_dir = /var/lib/odoo
@@ -16,17 +16,12 @@ db_password = ${PASSWORD}
 without_demo = True
 proxy_mode = True
 EOF
-fi
 
-# Esperar a PostgreSQL solo si HOST está definido
-if [ -n "$HOST" ]; then
-    echo "Esperando a PostgreSQL en $HOST:5432..."
-    until PGPASSWORD=$PASSWORD psql -h "$HOST" -U "$USER" -d postgres -c '\q'; do
-        >&2 echo "PostgreSQL no disponible - esperando..."
-        sleep 5
-    done
-    echo "PostgreSQL está listo!"
-fi
+echo "Esperando PostgreSQL..."
+until PGPASSWORD=$PASSWORD psql -h "$HOST" -U "$USER" -d postgres -c '\q'; do
+  echo "PostgreSQL no disponible - esperando..."
+  sleep 5
+done
 
-echo "Iniciando Odoo..."
-exec "$@"
+echo "PostgreSQL listo - Iniciando Odoo..."
+exec python3 /usr/bin/odoo -c /etc/odoo/odoo.conf "$@"
